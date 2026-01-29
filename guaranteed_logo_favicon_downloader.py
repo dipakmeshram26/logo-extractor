@@ -165,3 +165,6 @@ print(f"❌ Not found (any way): {not_found}")
 print("✔ LOGO if exists | ✔ FAVICON if logo not found | ✔ GOOGLE fallback")
 print("📁 All images stored inside /logos folder")
 print("=" * 60)
+
+
+#  file choos krne ka option nahi tha  ,

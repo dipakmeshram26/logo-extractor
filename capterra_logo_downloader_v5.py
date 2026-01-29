@@ -25,7 +25,6 @@ FAVICON_LOGO = 0
 NOT_FOUND = 0
 
 
-# ========== FROM YOUR GUARANTEED FILE ==========
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
@@ -54,6 +53,7 @@ def save_image(content, ext, base_path):
         img = img.convert("RGBA")
         img.save(base_path + ".png", "PNG", quality=100)
         return True
+
     with open(base_path + ext, "wb") as f:
         f.write(content)
     return True
@@ -64,9 +64,11 @@ def download(url, base_path):
         r = requests.get(url, headers=HEADERS, timeout=20)
         if r.status_code != 200 or not r.content:
             return False
+
         ext = os.path.splitext(urlparse(url).path)[1].lower()
         if ext not in SUPPORTED_FORMATS:
             ext = ".png"
+
         save_image(r.content, ext, base_path)
         return True
     except:
@@ -88,7 +90,6 @@ def fetch_logo_or_favicon(domain, title, logos_dir):
     except:
         pass
 
-    # WEBSITE LOGO
     if soup:
         for sel in ["img[alt*='logo' i]", "img[class*='logo' i]", "img[id*='logo' i]"]:
             tag = soup.select_one(sel)
@@ -98,7 +99,6 @@ def fetch_logo_or_favicon(domain, title, logos_dir):
                     FAVICON_LOGO += 1
                     return True
 
-    # FAVICON LINKS
     if soup:
         for link in soup.find_all("link"):
             rel = " ".join(link.get("rel", [])).lower()
@@ -108,13 +108,11 @@ def fetch_logo_or_favicon(domain, title, logos_dir):
                     FAVICON_LOGO += 1
                     return True
 
-    # /favicon.ico
     if download(f"{homepage}/favicon.ico", base_path):
         print(f"🟡 FAVICON: {title}")
         FAVICON_LOGO += 1
         return True
 
-    # GOOGLE FAVICON
     google = f"https://www.google.com/s2/favicons?domain={domain}&sz=256"
     if download(google, base_path):
         print(f"🟡 GOOGLE FAVICON: {title}")
@@ -126,24 +124,27 @@ def fetch_logo_or_favicon(domain, title, logos_dir):
     return False
 
 
-# ========== CAPTERRA PART ==========
-
 def normalize(t):
     return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', (t or '').lower())).strip()
 
 
 def scroll_page(driver):
-    for _ in range(5):
+    for _ in range(6):
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(2)
 
 
 def main():
-    global TOTAL, CAPTERRA_LOGO
+    global TOTAL, CAPTERRA_LOGO, NOT_FOUND
 
     Tk().withdraw()
     csv_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
     if not csv_path:
+        return
+
+    category_url = input("\n👉 Paste Capterra category URL: ").strip()
+    if not category_url.startswith("http"):
+        print("❌ Invalid category URL")
         return
 
     base_dir = os.path.dirname(csv_path)
@@ -156,30 +157,15 @@ def main():
     TOTAL = len(rows)
     pending = {normalize(r["Title"]): r for r in rows if r.get("Title")}
 
-    category_name = os.path.basename(csv_path).replace(".csv", "").replace("-", " ").title()
-
     options = Options()
     options.add_argument("--start-maximized")
+    options.add_argument("--disable-blink-features=AutomationControlled")
 
     driver = webdriver.Chrome(
         service=Service(ChromeDriverManager().install()),
         options=options
     )
     wait = WebDriverWait(driver, 30)
-
-    driver.get("https://www.capterra.in/directory")
-    time.sleep(5)
-
-    cats = driver.find_elements(By.CSS_SELECTOR, "a.list-group-item.list-group-item-action.border-0.fw-bold")
-    category_url = None
-    for c in cats:
-        if normalize(c.text) == normalize(category_name):
-            category_url = c.get_attribute("href")
-            break
-
-    if not category_url:
-        print("❌ Category not found")
-        return
 
     page_url = category_url
 
@@ -192,8 +178,9 @@ def main():
 
         for card in cards:
             try:
-                name_el = card.find_element(By.CSS_SELECTOR, "h2.h5.fw-bold.mb-2 a")
-                img_el = card.find_element(By.CSS_SELECTOR, "img.img-fluid")
+                name_el = card.find_element(By.CSS_SELECTOR, "h2.h5 a")
+                img_el = card.find_element(By.TAG_NAME, "img")
+
                 scraped = normalize(name_el.text)
                 img_url = img_el.get_attribute("src")
 
@@ -205,7 +192,7 @@ def main():
                             re.sub(r'[^a-zA-Z0-9\-]', '', title.replace(" ", "-").lower())
                         )
 
-                        if download(img_url, base_path):
+                        if img_url and download(img_url, base_path):
                             print(f"✅ CAPTERRA LOGO: {title}")
                             CAPTERRA_LOGO += 1
                         else:
@@ -213,8 +200,6 @@ def main():
                             if domain:
                                 fetch_logo_or_favicon(domain, title, logos_dir)
                             else:
-                                print(f"❌ NO DOMAIN: {title}")
-                                global NOT_FOUND
                                 NOT_FOUND += 1
 
                         del pending[key]
@@ -223,7 +208,7 @@ def main():
                 continue
 
         try:
-            next_btn = driver.find_element(By.CSS_SELECTOR, "ul.pagination li.page-item.next a")
+            next_btn = driver.find_element(By.CSS_SELECTOR, "a[rel='next']")
             page_url = next_btn.get_attribute("href")
         except:
             break
@@ -249,11 +234,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-# ================================================
